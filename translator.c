@@ -11,82 +11,24 @@
 
 #include "translator.h"
 
-#define MAX_STACK_SIZE 10
+void tr_insert_ordered(node_founded_string_t **head, logic_sentences_t *data, int index) {
+    node_founded_string_t *new_node = (node_founded_string_t *) malloc(sizeof(node_founded_string_t));
+    new_node->data = data;
+    new_node->index = index;
+    new_node->next = NULL;
 
-typedef struct {
-    char * data;
-    struct node * next;
-} node ;
-
-typedef struct {
-    node * top;
-} stack ;
-
-stack* create_stack() {
-    stack *new_stack = (stack*) malloc(sizeof(stack));
-    new_stack->top = NULL;
-    return new_stack;
-}
-
-int is_empty(stack *Stack) {
-    return Stack->top == NULL;
-}
-
-void push(stack *stack, char * data)
-{
-    node *new_top = (node*) malloc(sizeof(node));
-    new_top->data = data;
-    new_top->next = stack->top;
-    stack->top = new_top;
-}
-
-char *pop(stack *Stack) {
-    if (is_empty(Stack)) {
-        return NULL;
+    if (*head == NULL || index < (*head)->index) {
+        new_node->next = *head;
+        *head = new_node;
+    } else {
+        node_founded_string_t *current = *head;
+        while (current->next != NULL && current->next->index <= index) {
+            current = current->next;
+        }
+        new_node->next = current->next;
+        current->next = new_node;
     }
-
-    node *current = Stack->top;
-    char *data = current->data;
-    Stack->top = current->next;
-    free(current);
-
-    return data;
 }
-
-typedef struct {
-    char * name;
-    char **dictionary;
-    int len_dict;
-    int index_dict;
-
-    void (*func)(char *);
-} conective;
-
-const conective OR = {
-        .name = "v",
-        .dictionary = OR_SENTENCES,
-        .len_dict = 11,
-        .index_dict = 10,
-        .func = NULL
-};
-
-const conective AND = {
-        .name = "^",
-        .dictionary = AND_SENTENCES,
-        .len_dict = 11,
-        .index_dict = 10,
-        .func = NULL
-};
-
-const conective NOT = {
-        .name = "~",
-        .dictionary = NOT_SENTENCES,
-        .len_dict = 10,
-        .index_dict = 9,
-        .func = NULL
-};
-
-char *test_string = "paulo disse a verdade, lucas mentiu e joao nao disse a verdade";
 
 void tr_split_string(const char *inputString, int index, char **firstHalf, char **secondHalf, int len_conective) {
     int strLength = strlen(inputString);
@@ -126,81 +68,95 @@ int tr_search_substring(const char *str, const char *sub) {
     return -1;
 }
 
-stack * sentence_queue;
+node_founded_string_t *head = NULL;
 
-int tr_translator_str(const conective sub, const char *str) {
+void tr_print_linked_list(node_founded_string_t *head) {
+    node_founded_string_t *current = head;
 
+    int index = 0;
+
+    if(current == NULL) {
+        printf("P\n");
+        return;
+    }
+
+    if (current->data->simbol == NOT) {
+        printf("%s", current->data->simbol);
+        current = current->next;
+    }
+
+    printf("%s", proposicionals_simbols[index]);
+
+    while (current != NULL) {
+        if (current->next == NULL) {
+            goto segmentation_fault_bypass;
+        }
+        if (current->next->data->simbol == NOT) {
+            index++;
+            printf(" %s ", current->data->simbol);
+            printf("%s", current->next->data->simbol);
+            printf("%s ", proposicionals_simbols[index]);
+            current = current->next->next;
+        } else {
+            segmentation_fault_bypass:
+            index++;
+            printf(" %s ", current->data->simbol);
+            printf("%s", proposicionals_simbols[index]);
+            current = current->next;
+        }
+    }
+
+    printf("\n");
+}
+
+
+void tr_translator_str(const list_logic_conective_t sub, const char *str, int previous_index) {
     int index = -1;
-    int len_dict = sub.len_dict;
+    int len_dict = sub.len;
 
     char *first_str;
     char *second_str;
 
-    int end;
-
     for (int i = 0; i < len_dict; i++) {
-
-        //printf("Procurando: %s \n", sub.dictionary[i]);
-
-        index = tr_search_substring(str, sub.dictionary[i]);
-
-         //printf("Retorno do indice: %d \n", index);
+        index = tr_search_substring(str, sub.logic_conectives[i].equivalent_string);
 
         if (index == -1) {
             continue;
         }
 
-        tr_split_string(str, index, &first_str, &second_str, strlen(sub.dictionary[i]));
+        tr_split_string(str, index, &first_str, &second_str, strlen(sub.logic_conectives[i].equivalent_string));
 
-        printf("\nSTRING PAI: %s\n", str);
+/*        printf("###############\nReparticao na substring: %s\n\n1- %s\n2- %s\nindice: %d\n##############\n",
+               sub.logic_conectives[i].equivalent_string, first_str, second_str, previous_index+index);*/
 
-        //printf("STRING1: %s \n", first_str);
-        end = tr_translator_str(sub, first_str);
+        tr_insert_ordered(&head, &sub.logic_conectives[i], previous_index + index);
 
-        if(!end) {
-            if(!is_empty(sentence_queue)) {
-                push(sentence_queue, (char *)sub.name);
-            }
-            push(sentence_queue, first_str);
-        }
+        tr_translator_str(sub, first_str, previous_index);
+        tr_translator_str(sub, second_str, previous_index + index);
 
-        //printf("STRING2: %s \n", second_str);
-        end = tr_translator_str(sub, second_str);
+        return;
 
-        if(!end) {
-            push(sentence_queue, (char *)sub.name);
-            push(sentence_queue, second_str);
-        }
-
-        printf("Retorno\n\n");
-
-        return 1;
     }
-
-    return 0;
+    return;
 }
 
 
 int main() {
 
-    printf("Start...\n");
+    char *input_str = NULL;
 
-    sentence_queue = create_stack();
+    printf("Digite sua sentenca: \n");
 
-    tr_translator_str(AND, test_string);
+    scanf("%m[^\n]", &input_str);
 
-    while(1) {
+    printf("Sua string: %s\n", input_str);
 
-        char *str = pop(sentence_queue);
+    printf("Sua sentenca traduzida: \n");
+    tr_translator_str(list_default_conectives, input_str, 0);
 
-        if(str == NULL) {
-            break;
-        }
+    tr_print_linked_list(head);
 
-        printf("Pop: %s\n", str);
-    }
-
-
+    printf("\n");
 
 
     return 0;
